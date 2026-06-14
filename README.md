@@ -1,4 +1,4 @@
-# wal-ayugram-theme
+# wal-telegram-theme
 
 Динамическая тема для Telegram Desktop и AyuGram, которая автоматически подстраивается под цвета твоих обоев через `pywal`.
 
