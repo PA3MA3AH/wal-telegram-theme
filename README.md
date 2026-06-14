@@ -127,5 +127,3 @@ TELEGRAM_TDATA="${HOME}/.local/share/TelegramDesktop/tdata"
 ## Лицензия
 
 Проект распространяется под лицензией [MIT](https://www.google.com/search?q=LICENSE).
-
-```
