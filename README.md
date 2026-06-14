@@ -37,8 +37,8 @@
 ### 1. Скопируй скрипт
 Помести скрипт в свою локальную папку бинарников и сделай его исполняемым:
 ```bash
-cp wal-ayugram-theme ~/.local/bin/wal-ayugram-theme
-chmod +x ~/.local/bin/wal-ayugram-theme
+cp wal-telegram-theme ~/.local/bin/wal-telegram-theme
+chmod +x ~/.local/bin/wal-telegram-theme
 
 ```
 
@@ -56,7 +56,7 @@ nano ~/.config/wal/postrun
 
 ```bash
 #!/usr/bin/env bash
-~/.local/bin/wal-ayugram-theme
+~/.local/bin/wal-telegram-theme
 
 ```
 
@@ -74,7 +74,7 @@ chmod +x ~/.config/wal/postrun
 Если цвета уже сгенерированы — просто запусти скрипт напрямую:
 
 ```bash
-~/.local/bin/wal-ayugram-theme
+~/.local/bin/wal-telegram-theme
 
 ```
 
@@ -91,7 +91,7 @@ wal -i /путь/к/твоим/обоям.jpg
 
 > ⚠️ **Важно:** Это действие нужно выполнить всего один раз, чтобы связать Telegram с файлом темы. В будущем всё будет обновляться автоматически.
 
-1. Открой файловый менеджер и перейди в папку темы: `~/.local/share/ayugram-theme/`.
+1. Открой файловый менеджер и перейди в папку темы: `~/.local/share/telegram-theme/`.
 2. Перетащи файл `wal.tdesktop-theme` мышкой в Telegram/AyuGram (отправь его **самому себе в Избранное / Saved Messages**).
 3. Кликни по отправленному файлу темы прямо внутри чата Telegram и нажмите **«Применить тему»** (Apply theme).
 
@@ -118,7 +118,7 @@ TELEGRAM_TDATA="${HOME}/.local/share/TelegramDesktop/tdata"
 ## Как это работает
 
 1. `wal -i <обои>` анализирует цвета картинки и сохраняет палитру в `~/.cache/wal/colors.json`.
-2. Срабатывает скрипт `postrun`, который запускает `wal-ayugram-theme`.
+2. Срабатывает скрипт `postrun`, который запускает `wal-telegram-theme`.
 3. Скрипт читает палитру, упаковывает её вместе с обоями в zip-архив формата `.tdesktop-theme` и перезаписывает файлы в папках `tdata`.
 4. Telegram/AyuGram мгновенно подхватывают обновлённый файл темы без перезапуска приложения.
 
