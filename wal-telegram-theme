@@ -1,0 +1,746 @@
+#!/usr/bin/env bash
+# wal-telegram-theme — генерирует тему Telegram/AyuGram из цветов pywal
+set -euo pipefail
+
+# ── Пути ────────────────────────────────────────────────────────────────────
+# Файл с цветами pywal — не трогай, если не менял расположение кеша wal
+CACHE_JSON="${HOME}/.cache/wal/colors.json"
+
+# Симлинк на текущие обои — используется как фон внутри темы.
+# Если у тебя обои лежат в другом месте, замени на полный путь к файлу,
+# например: WALLPAPER_LINK="${HOME}/Pictures/current.jpg"
+WALLPAPER_LINK="${HOME}/wallpapers/current"
+
+# Папка где хранится сгенерированный .tdesktop-theme файл
+THEME_DIR="${HOME}/.local/share/ayugram-theme"
+
+# Папки tdata для каждого приложения — скрипт запишет тему туда где папка существует.
+# Если используешь другой форк (64gram, Kotatogram и т.п.) — добавь его tdata сюда.
+AYUGRAM_TDATA="${HOME}/.local/share/AyuGram/tdata"
+TELEGRAM_TDATA="${HOME}/.local/share/TelegramDesktop/tdata"
+# ────────────────────────────────────────────────────────────────────────────
+
+mkdir -p "${THEME_DIR}"
+
+if [[ ! -f "${CACHE_JSON}" ]]; then
+    echo "error: ${CACHE_JSON} not found — run 'wal -i <wallpaper>' first" >&2
+    exit 1
+fi
+
+CACHE_JSON="$CACHE_JSON" \
+WALLPAPER_LINK="$WALLPAPER_LINK" \
+THEME_DIR="$THEME_DIR" \
+AYUGRAM_TDATA="$AYUGRAM_TDATA" \
+TELEGRAM_TDATA="$TELEGRAM_TDATA" \
+python3 << 'PY'
+import json, os, zipfile, io, subprocess, sys
+
+cache_json     = os.environ["CACHE_JSON"]
+wallpaper_link = os.environ["WALLPAPER_LINK"]
+theme_dir      = os.environ["THEME_DIR"]
+ayugram_tdata  = os.environ["AYUGRAM_TDATA"]
+telegram_tdata = os.environ["TELEGRAM_TDATA"]
+theme_file     = os.path.join(theme_dir, "wal.tdesktop-theme")
+
+with open(cache_json) as f:
+    data = json.load(f)
+
+special = data["special"]
+colors  = data["colors"]
+
+# ── Цвета палитры ────────────────────────────────────────────────────────────
+bg = special["background"]
+fg = "#f2f5f7"
+
+c0 = colors["color0"]
+c1 = colors["color1"]
+c2 = colors["color2"]
+c3 = colors["color3"]
+c4 = colors["color4"]
+c5 = colors["color5"]  
+c6 = colors["color6"]  
+c7 = colors["color7"]
+# ────────────────────────────────────────────────────────────────────────────
+
+def alpha(hex_color, a):
+    h = hex_color.lstrip("#")
+    return f"#{h}{a:02x}"
+
+def mix(c1, c2, t=0.5):
+    h1 = c1.lstrip("#")
+    h2 = c2.lstrip("#")
+    r = int(int(h1[0:2],16)*(1-t) + int(h2[0:2],16)*t)
+    g = int(int(h1[2:4],16)*(1-t) + int(h2[2:4],16)*t)
+    b = int(int(h1[4:6],16)*(1-t) + int(h2[4:6],16)*t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+bg_semi    = alpha(bg, 0xcc)  
+bg_light   = alpha(bg, 0x99)  
+bg_lighter = alpha(bg, 0x66)  
+c0_semi    = alpha(c0, 0xcc)
+c5_semi    = alpha(c5, 0xcc)
+c5_light   = alpha(c5, 0x88)
+
+# ── Тема ─────────────────────────────────────────────────────────────────────
+theme = f"""
+windowBg: {bg_semi};
+windowFg: {fg};
+windowBgOver: {alpha(c0, 0xcb)};
+windowBgRipple: {alpha(c0, 0xcb)};
+windowFgOver: {fg};
+windowSubTextFg: {fg};
+windowSubTextFgOver: #ebebeb;
+windowBoldFg: {fg};
+windowBoldFgOver: {fg};
+windowBgActive: {c5};
+windowFgActive: {fg};
+windowActiveTextFg: {c5};
+windowShadowFg: {c0};
+windowShadowFgFallback: #000000;
+shadowFg: {alpha("#000000", 0x56)};
+slideFadeOutBg: {alpha("#000000", 0x3c)};
+slideFadeOutShadowFg: #000000;
+imageBg: #000000;
+imageBgTransparent: #ffffff;
+activeButtonBg: {c5};
+activeButtonBgOver: {c4};
+activeButtonBgRipple: {mix(c5, "#000000", 0.3)};
+activeButtonFg: {fg};
+activeButtonFgOver: {fg};
+activeButtonSecondaryFg: {c6};
+activeButtonSecondaryFgOver: {c6};
+activeLineFg: {c5};
+activeLineFgError: #ef5959;
+lightButtonBg: {alpha(c0, 0xcc)};
+lightButtonBgOver: {alpha(c5, 0x44)};
+lightButtonBgRipple: {alpha(c5, 0x33)};
+lightButtonFg: {fg};
+lightButtonFgOver: {fg};
+attentionButtonFg: #ff5555;
+attentionButtonFgOver: #ff3333;
+attentionButtonBgOver: {alpha("#592a2a", 0x64)};
+attentionButtonBgRipple: {alpha("#682222", 0x64)};
+outlineButtonBg: {bg_semi};
+outlineButtonBgOver: {alpha(c0, 0xcc)};
+outlineButtonOutlineFg: {c5};
+outlineButtonBgRipple: {alpha(c5, 0x33)};
+menuBg: {alpha(bg, 0xe0)};
+menuBgOver: {alpha(c5, 0x33)};
+menuBgRipple: {alpha(c5, 0x44)};
+menuIconFg: {c5};
+menuIconFgOver: {c6};
+menuSubmenuArrowFg: {c5};
+menuFgDisabled: #797474;
+menuSeparatorFg: {c0};
+scrollBarBg: {alpha(c5, 0x88)};
+scrollBarBgOver: {alpha(c5, 0xcc)};
+scrollBg: {alpha(c0, 0x44)};
+scrollBgOver: {alpha(c0, 0x66)};
+smallCloseIconFg: {alpha(c5, 0xd9)};
+smallCloseIconFgOver: {c5};
+radialFg: {c5};
+radialBg: {alpha("#000000", 0x56)};
+placeholderFg: {alpha(fg, 0xaa)};
+placeholderFgActive: {alpha(fg, 0xcc)};
+inputBorderFg: {alpha(c5, 0x88)};
+filterInputBorderFg: {alpha(c5, 0x88)};
+filterInputInactiveBg: {alpha(bg, 0xcf)};
+checkboxFg: {alpha(c5, 0x88)};
+sliderBgInactive: {alpha(c5, 0x66)};
+sliderBgActive: {c5};
+tooltipBg: {alpha(bg, 0xee)};
+tooltipFg: {fg};
+tooltipBorderFg: {c0};
+titleShadow: #00000000;
+titleBg: {alpha(bg, 0xee)};
+titleBgActive: {alpha(bg, 0xff)};
+titleButtonBg: {alpha(bg, 0xee)};
+titleButtonFg: {c5};
+titleButtonBgOver: {alpha(c5, 0x33)};
+titleButtonFgOver: {fg};
+titleButtonBgActive: {alpha(bg, 0xff)};
+titleButtonFgActive: {c5};
+titleButtonBgActiveOver: {alpha(c5, 0x33)};
+titleButtonFgActiveOver: {fg};
+titleButtonCloseBg: {alpha(bg, 0xee)};
+titleButtonCloseFg: {c5};
+titleButtonCloseBgOver: #c0392b;
+titleButtonCloseFgOver: #ffffff;
+titleButtonCloseBgActive: {alpha(bg, 0xff)};
+titleButtonCloseFgActive: {c5};
+titleButtonCloseBgActiveOver: #c0392b;
+titleButtonCloseFgActiveOver: #ffffff;
+titleFg: {alpha(fg, 0x88)};
+titleFgActive: {fg};
+trayCounterBg: #f23c34;
+trayCounterBgMute: #888888;
+trayCounterFg: #ffffff;
+trayCounterBgMacInvert: #ffffff;
+trayCounterFgMacInvert: #ffffff01;
+layerBg: {alpha("#000000", 0x7f)};
+cancelIconFg: {alpha(fg, 0x88)};
+cancelIconFgOver: {fg};
+boxBg: {alpha(bg, 0xf0)};
+boxTextFg: {fg};
+boxTextFgGood: {c2};
+boxTextFgError: #dc3d3d;
+boxTitleFg: {c5};
+boxSearchBg: {alpha(c0, 0xcc)};
+boxTitleAdditionalFg: {alpha(fg, 0x88)};
+boxTitleCloseFg: {c5};
+boxTitleCloseFgOver: {c6};
+membersAboutLimitFg: {alpha(fg, 0x88)};
+contactsBg: {alpha(bg, 0xee)};
+contactsBgOver: {alpha(c0, 0xcc)};
+contactsNameFg: {fg};
+contactsStatusFg: {alpha(fg, 0xcc)};
+contactsStatusFgOver: {alpha(fg, 0xcc)};
+contactsStatusFgOnline: {c5};
+photoCropFadeBg: {alpha("#000000", 0x7f)};
+photoCropPointFg: {alpha("#ffffff", 0x7f)};
+callArrowFg: {c5};
+callArrowMissedFg: #ed5050;
+introBg: {alpha(bg, 0xff)};
+introTitleFg: {fg};
+introDescriptionFg: {alpha(fg, 0x88)};
+introErrorFg: #e94040;
+introCoverTopBg: {bg};
+introCoverBottomBg: {c0};
+introCoverIconsFg: {c5};
+introCoverPlaneTrace: {alpha(c5, 0x88)};
+introCoverPlaneInner: {fg};
+introCoverPlaneOuter: {alpha(fg, 0x88)};
+introCoverPlaneTop: #ffffff;
+dialogsMenuIconFg: {c5};
+dialogsMenuIconFgOver: {c6};
+dialogsBg: {alpha(bg, 0xee)};
+dialogsNameFg: {fg};
+dialogsChatIconFg: {c5};
+dialogsDateFg: {alpha(fg, 0xcc)};
+dialogsTextFg: {alpha(fg, 0xdd)};
+dialogsTextFgService: {c5};
+dialogsDraftFg: #ff525d;
+dialogsVerifiedIconBg: {c5};
+dialogsVerifiedIconFg: {bg};
+dialogsSendingIconFg: {alpha(fg, 0x88)};
+dialogsSentIconFg: {c5};
+dialogsUnreadBg: {c5};
+dialogsUnreadBgMuted: {alpha(c5, 0x88)};
+dialogsUnreadFg: #ffffff;
+dialogsBgOver: {alpha(c0, 0xcc)};
+dialogsOnlineBadgeFg: {c2};
+dialogsNameFgOver: {fg};
+dialogsChatIconFgOver: {c6};
+dialogsDateFgOver: {fg};
+dialogsTextFgOver: {fg};
+dialogsTextFgServiceOver: {c5};
+dialogsDraftFgOver: #ff525d;
+dialogsVerifiedIconBgOver: {c6};
+dialogsVerifiedIconFgOver: {bg};
+dialogsSendingIconFgOver: {alpha(fg, 0x88)};
+dialogsSentIconFgOver: {c6};
+dialogsUnreadBgOver: {c6};
+dialogsUnreadBgMutedOver: {alpha(c5, 0xaa)};
+dialogsUnreadFgOver: #ffffff;
+dialogsBgActive: {alpha(c5, 0x44)};
+dialogsNameFgActive: {fg};
+dialogsChatIconFgActive: {c6};
+dialogsDateFgActive: {fg};
+dialogsTextFgActive: {fg};
+dialogsTextFgServiceActive: {c5};
+dialogsDraftFgActive: #ff525d;
+dialogsVerifiedIconBgActive: {c5};
+dialogsVerifiedIconFgActive: {bg};
+dialogsSendingIconFgActive: {alpha("#ffffff", 0x99)};
+dialogsSentIconFgActive: {c6};
+dialogsUnreadBgActive: {c5};
+dialogsUnreadBgMutedActive: {alpha(c5, 0xaa)};
+dialogsUnreadFgActive: #ffffff;
+dialogsOnlineBadgeFgActive: {c2};
+dialogsRippleBg: {alpha(c5, 0x33)};
+dialogsRippleBgActive: {alpha(c5, 0x44)};
+dialogsForwardBg: {alpha(c0, 0xcc)};
+dialogsForwardFg: dialogsNameFgActive;
+searchedBarBg: {alpha(c0, 0xee)};
+searchedBarFg: {fg};
+topBarBg: {alpha(bg, 0xee)};
+emojiPanBg: {alpha(bg, 0xf0)};
+emojiPanCategories: {alpha(c0, 0xee)};
+emojiPanHeaderFg: {alpha(fg, 0xcc)};
+emojiPanHeaderBg: {alpha(bg, 0xf2)};
+stickerPanDeleteBg: {alpha("#000000", 0xcc)};
+stickerPanDeleteFg: {c5};
+stickerPreviewBg: {alpha("#000000", 0xb0)};
+historyTextInFg: {fg};
+historyTextInFgSelected: {fg};
+historyTextOutFg: {fg};
+historyTextOutFgSelected: {fg};
+historyLinkInFg: {c5};
+historyLinkInFgSelected: {c5};
+historyLinkOutFg: {c6};
+historyLinkOutFgSelected: {c6};
+historyFileNameInFg: {fg};
+historyFileNameInFgSelected: {fg};
+historyFileNameOutFg: {fg};
+historyFileNameOutFgSelected: {fg};
+historyOutIconFg: {alpha(c5, 0xcc)};
+historyOutIconFgSelected: {c5};
+historyIconFgInverted: #ffffff;
+historySendingOutIconFg: {alpha(c5, 0x88)};
+historySendingInIconFg: {alpha(fg, 0x88)};
+historySendingInvertedIconFg: {alpha("#ffffff", 0xc8)};
+historyCallArrowInFg: {c5};
+historyCallArrowInFgSelected: {fg};
+historyCallArrowMissedInFg: #ed5050;
+historyCallArrowMissedInFgSelected: #ffffff;
+historyCallArrowOutFg: {c5};
+historyCallArrowOutFgSelected: {fg};
+historyUnreadBarBg: {alpha(c0, 0xee)};
+historyUnreadBarBorder: {alpha("#000000", 0x00)};
+historyUnreadBarFg: {fg};
+historyForwardChooseBg: {alpha("#000000", 0x4c)};
+historyForwardChooseFg: {c5};
+historyPeer1NameFg: #fb6169;
+historyPeer1NameFgSelected: {fg};
+historyPeer1UserpicBg: {c1};
+historyPeer2NameFg: {c2};
+historyPeer2NameFgSelected: {fg};
+historyPeer2UserpicBg: {c2};
+historyPeer3NameFg: {c3};
+historyPeer3NameFgSelected: {fg};
+historyPeer3UserpicBg: {c3};
+historyPeer4NameFg: {c4};
+historyPeer4NameFgSelected: {fg};
+historyPeer4UserpicBg: {c4};
+historyPeer5NameFg: {c5};
+historyPeer5NameFgSelected: {fg};
+historyPeer5UserpicBg: {c5};
+historyPeer6NameFg: {c6};
+historyPeer6NameFgSelected: {fg};
+historyPeer6UserpicBg: {c6};
+historyPeer7NameFg: {c5};
+historyPeer7NameFgSelected: {fg};
+historyPeer7UserpicBg: {alpha(c5, 0xd1)};
+historyPeer8NameFg: {c3};
+historyPeer8NameFgSelected: {fg};
+historyPeer8UserpicBg: {c3};
+historyPeerUserpicFg: #ffffff;
+historyPeer1UserpicBg2: {mix(c1, "#000000", 0.3)};
+historyPeer2UserpicBg2: {mix(c2, "#000000", 0.3)};
+historyPeer3UserpicBg2: {mix(c3, "#000000", 0.3)};
+historyPeer4UserpicBg2: {mix(c4, "#000000", 0.3)};
+historyPeer5UserpicBg2: {mix(c5, "#000000", 0.3)};
+historyPeer6UserpicBg2: {mix(c6, "#000000", 0.3)};
+historyPeer7UserpicBg2: {mix(c5, "#000000", 0.3)};
+historyPeer8UserpicBg2: {mix(c3, "#000000", 0.3)};
+historyPeerSavedMessagesBg2: {mix(c5, "#000000", 0.3)};
+historyScrollBarBg: {alpha(c5, 0x88)};
+historyScrollBarBgOver: {alpha(c5, 0xbc)};
+historyScrollBg: {alpha(c5, 0x5a)};
+historyScrollBgOver: {alpha(c5, 0x67)};
+msgInBg: {alpha(c0, 0xd3)};
+msgInBgSelected: {alpha(c0, 0xd6)};
+msgOutBg: {alpha(mix(bg, c5, 0.2), 0xe5)};
+msgOutBgSelected: {alpha(mix(bg, c5, 0.3), 0xe2)};
+msgSelectOverlay: {alpha(c5, 0x44)};
+msgStickerOverlay: {alpha(c5, 0x7f)};
+msgInServiceFg: {c5};
+msgInServiceFgSelected: {fg};
+msgOutServiceFg: {c6};
+msgOutServiceFgSelected: {fg};
+msgInShadow: {alpha(c0, 0x96)};
+msgInShadowSelected: {c0};
+msgOutShadow: #00000000;
+msgOutShadowSelected: #00000000;
+msgInDateFg: {alpha(c5, 0xcc)};
+msgInDateFgSelected: {alpha(fg, 0xcc)};
+msgOutDateFg: {alpha(c5, 0xcc)};
+msgOutDateFgSelected: {fg};
+msgServiceFg: {fg};
+msgServiceBg: {alpha(mix(bg, c5, 0.3), 0xd5)};
+msgServiceBgSelected: {alpha(c5, 0x66)};
+msgInReplyBarColor: {c5};
+msgInReplyBarSelColor: {fg};
+msgOutReplyBarColor: {c6};
+msgOutReplyBarSelColor: {fg};
+msgImgReplyBarColor: #ffffff;
+msgInMonoFg: {c4};
+msgOutMonoFg: {c5};
+msgInMonoFgSelected: {c5};
+msgOutMonoFgSelected: {c5};
+msgDateImgFg: #fffffff2;
+msgDateImgBg: {alpha("#000000", 0x8b)};
+msgDateImgBgOver: {alpha("#000000", 0x74)};
+msgDateImgBgSelected: {alpha(c5, 0x81)};
+msgFileThumbLinkInFg: {c5};
+msgFileThumbLinkInFgSelected: {fg};
+msgFileThumbLinkOutFg: {c6};
+msgFileThumbLinkOutFgSelected: {fg};
+msgFileInBg: {c5};
+msgFileInBgOver: {c4};
+msgFileInBgSelected: {alpha(fg, 0xcc)};
+msgFileOutBg: {c6};
+msgFileOutBgOver: {c5};
+msgFileOutBgSelected: {alpha(c5, 0xcc)};
+msgFile1Bg: {c5};
+msgFile1BgDark: {c5};
+msgFile1BgOver: {mix(c5, "#000000", 0.2)};
+msgFile1BgSelected: #ffffff;
+msgFile2Bg: {c2};
+msgFile2BgDark: {c2};
+msgFile2BgOver: {mix(c2, "#000000", 0.2)};
+msgFile2BgSelected: {mix(c2, "#000000", 0.2)};
+msgFile3Bg: {c1};
+msgFile3BgDark: {mix(c1, "#000000", 0.1)};
+msgFile3BgOver: {mix(c1, "#000000", 0.2)};
+msgFile3BgSelected: {mix(c1, "#000000", 0.2)};
+msgFile4Bg: {c3};
+msgFile4BgDark: {mix(c3, "#000000", 0.1)};
+msgFile4BgOver: {mix(c3, "#000000", 0.2)};
+msgFile4BgSelected: {mix(c3, "#000000", 0.2)};
+historyFileInIconFg: {bg};
+historyFileInIconFgSelected: {bg};
+historyFileInRadialFg: #ffffff;
+historyFileInRadialFgSelected: historyFileInIconFgSelected;
+historyFileOutIconFg: {bg};
+historyFileOutIconFgSelected: {bg};
+historyFileOutRadialFg: #ffffff;
+historyFileOutRadialFgSelected: #ffffff;
+historyFileThumbIconFg: #efefef;
+historyFileThumbIconFgSelected: #ffffff;
+historyFileThumbRadialFg: historyFileThumbIconFg;
+historyFileThumbRadialFgSelected: #ffffff;
+historyVideoMessageProgressFg: #efefef;
+msgWaveformInActive: {c5};
+msgWaveformInActiveSelected: {c6};
+msgWaveformInInactive: {alpha(c5, 0x6e)};
+msgWaveformInInactiveSelected: {alpha(c0, 0xcc)};
+msgWaveformOutActive: {c6};
+msgWaveformOutActiveSelected: {c5};
+msgWaveformOutInactive: {alpha(c5, 0x44)};
+msgWaveformOutInactiveSelected: {alpha(c5, 0x88)};
+msgBotKbOverBgAdd: {alpha(c5, 0x0f)};
+msgBotKbIconFg: #ffffff;
+msgBotKbRippleBg: {alpha(c5, 0x0b)};
+mediaInFg: {c5};
+mediaInFgSelected: {alpha(fg, 0xcc)};
+mediaOutFg: {c6};
+mediaOutFgSelected: #ffffff;
+youtubePlayIconBg: #e83131c8;
+youtubePlayIconFg: {c5};
+videoPlayIconBg: {alpha("#000000", 0x7f)};
+videoPlayIconFg: #ffffff;
+toastBg: {alpha("#000000", 0xb2)};
+toastFg: {fg};
+reportSpamBg: {alpha(c0, 0xee)};
+reportSpamFg: {fg};
+historyToDownBg: {alpha(bg, 0xee)};
+historyToDownBgOver: {alpha(c0, 0xee)};
+historyToDownBgRipple: {alpha(c0, 0xee)};
+historyToDownFg: {fg};
+historyToDownFgOver: {fg};
+historyToDownShadow: {alpha("#000000", 0x40)};
+historyComposeAreaBg: {alpha(bg, 0xee)};
+historyComposeAreaFg: {fg};
+historyComposeAreaFgService: {c5};
+historyComposeIconFg: {c5};
+historyComposeIconFgOver: {c6};
+historySendIconFg: {c5};
+historySendIconFgOver: {c6};
+historyPinnedBg: {alpha(bg, 0xee)};
+historyReplyBg: {alpha(bg, 0xee)};
+historyReplyIconFg: {c5};
+historyReplyCancelFg: {alpha(c5, 0xcc)};
+historyReplyCancelFgOver: {c5};
+historyComposeButtonBg: {alpha(bg, 0xee)};
+historyComposeButtonBgOver: {alpha(c0, 0xcc)};
+historyComposeButtonBgRipple: {alpha(c5, 0x44)};
+overviewCheckBg: {alpha("#000000", 0x40)};
+overviewCheckFg: #ffffff;
+overviewCheckFgActive: #ffffff;
+overviewPhotoSelectOverlay: {alpha(c5, 0x33)};
+profileStatusFgOver: {alpha(fg, 0x88)};
+profileVerifiedCheckBg: {c5};
+profileVerifiedCheckFg: #ffffff;
+profileAdminStartFg: {c5};
+notificationsBoxMonitorFg: #ffffff;
+notificationsBoxScreenBg: {alpha(c0, 0xee)};
+notificationSampleUserpicFg: {c5};
+notificationSampleCloseFg: #d7d7d7;
+notificationSampleTextFg: #d7d7d7;
+notificationSampleNameFg: #939393;
+changePhoneSimcardFrom: notificationSampleTextFg;
+changePhoneSimcardTo: #939393;
+mainMenuBg: {alpha(bg, 0xf0)};
+mainMenuCoverBg: {alpha(c0, 0xee)};
+mainMenuCoverFg: {fg};
+mainMenuCloudFg: #ffffff;
+mainMenuCloudBg: {alpha(c5, 0x88)};
+mediaPlayerBg: {alpha(bg, 0xf0)};
+mediaPlayerActiveFg: {c5};
+mediaPlayerInactiveFg: {alpha(c5, 0x8f)};
+mediaPlayerDisabledFg: {alpha(fg, 0x88)};
+mediaviewFileBg: {alpha(bg, 0xf0)};
+mediaviewFileNameFg: {fg};
+mediaviewFileSizeFg: {fg};
+mediaviewFileRedCornerFg: #d55959;
+mediaviewFileYellowCornerFg: #e8a659;
+mediaviewFileGreenCornerFg: #49a957;
+mediaviewFileBlueCornerFg: {c5};
+mediaviewFileExtFg: #ffffff;
+mediaviewMenuBg: {alpha(bg, 0xf0)};
+mediaviewMenuBgOver: {alpha(c5, 0x44)};
+mediaviewMenuBgRipple: {alpha(c5, 0x55)};
+mediaviewMenuFg: {fg};
+mediaviewBg: {alpha("#000000", 0xdb)};
+mediaviewVideoBg: #000000;
+mediaviewControlBg: {alpha("#000000", 0x3c)};
+mediaviewControlFg: {c5};
+mediaviewCaptionBg: {alpha(bg, 0xb5)};
+mediaviewCaptionFg: {fg};
+mediaviewTextLinkFg: {c5};
+mediaviewSaveMsgBg: {alpha(bg, 0xba)};
+mediaviewSaveMsgFg: #ffffff;
+mediaviewPlaybackActive: {c5};
+mediaviewPlaybackInactive: {alpha(c5, 0x44)};
+mediaviewPlaybackActiveOver: {c6};
+mediaviewPlaybackInactiveOver: {alpha(c5, 0x66)};
+mediaviewPlaybackProgressFg: {alpha(c5, 0xb2)};
+mediaviewPlaybackIconFg: {c5};
+mediaviewPlaybackIconFgOver: {c6};
+mediaviewTransparentBg: #ffffff;
+mediaviewTransparentFg: #cccccc;
+notificationBg: {alpha(bg, 0xf0)};
+callBg: {alpha("#000000", 0xf5)};
+callNameFg: {fg};
+callFingerprintBg: {alpha("#000000", 0x66)};
+callStatusFg: {c5};
+callIconFg: {c5};
+callAnswerBg: {c5};
+callAnswerRipple: {c6};
+callAnswerBgOuter: {alpha(c5, 0x26)};
+callHangupBg: #c0392b;
+callHangupRipple: #e74c3c;
+callCancelBg: #ffffff;
+callCancelFg: #536271;
+callCancelRipple: #536271;
+callMuteRipple: {alpha("#ffffff", 0x12)};
+callBarBg: {alpha(bg, 0xee)};
+callBarMuteRipple: {alpha(c5, 0x44)};
+callBarBgMuted: {alpha(c0, 0xee)};
+callBarUnmuteRipple: {alpha(c5, 0x44)};
+callBarFg: {fg};
+importantTooltipBg: {alpha(mix(bg, c5, 0.2), 0xb4)};
+importantTooltipFg: {fg};
+importantTooltipFgLink: {c5};
+filterInputActiveBg: {alpha(c0, 0xef)};
+botKbBg: {alpha(c0, 0xcc)};
+botKbDownBg: {alpha(c0, 0xcc)};
+emojiIconFg: {alpha(fg, 0xcc)};
+emojiIconFgActive: {c5};
+overviewCheckBorder: {alpha(fg, 0x44)};
+sideBarBg: {alpha(bg, 0xf0)};
+sideBarBgActive: {alpha(c5, 0x33)};
+sideBarBgRipple: {alpha(c5, 0x22)};
+sideBarTextFg: {alpha(fg, 0xaa)};
+sideBarTextFgActive: {fg};
+sideBarIconFg: {alpha(c5, 0xcc)};
+sideBarIconFgActive: {c5};
+sideBarBadgeBg: {c5};
+sideBarBadgeBgMuted: {alpha(c5, 0x88)};
+sideBarBadgeFg: #ffffff;
+statisticsChartInactive: {alpha("#313d4c", 0xc8)};
+statisticsChartActive: {alpha("#526679", 0xd8)};
+boxDividerFg: {c0};
+boxDividerBg: {alpha("#000000", 0xcb)};
+dialogsArchiveFg: {alpha(c5, 0xcc)};
+dialogsArchiveFgOver: {c5};
+callBgOpaque: {bg};
+groupCallBg: {alpha(bg, 0xf0)};
+groupCallMembersBg: {alpha(c0, 0xe2)};
+groupCallMembersBgOver: {alpha(c0, 0xff)};
+groupCallMembersBgRipple: {alpha(c5, 0x44)};
+groupCallMembersFg: {fg};
+groupCallMemberInactiveIcon: {alpha(c5, 0xcc)};
+groupCallMemberMutedIcon: #ed7372;
+groupCallMemberActiveIcon: {c2};
+groupCallMemberActiveStatus: {c2};
+groupCallMemberInactiveStatus: {c5};
+groupCallMemberNotJoinedStatus: {fg};
+groupCallIconFg: {fg};
+groupCallActiveFg: {c5};
+groupCallMuted1: {mix(c5, "#0000ee", 0.5)};
+groupCallMuted2: {c5};
+groupCallForceMutedBar1: {c1};
+groupCallForceMutedBar2: {c5};
+groupCallForceMutedBar3: {c4};
+groupCallForceMuted1: {c4};
+groupCallForceMuted2: {c5};
+groupCallForceMuted3: {c1};
+groupCallLive1: {c5};
+groupCallLive2: {c6};
+groupCallMenuBg: {alpha(bg, 0xf0)};
+groupCallMenuBgOver: {alpha(c5, 0x33)};
+groupCallMenuBgRipple: {alpha(c5, 0x44)};
+groupCallLeaveBg: {alpha("#f75c5c", 0x7f)};
+groupCallLeaveBgRipple: {alpha("#f75c5c", 0x9e)};
+groupCallVideoTextFg: {alpha("#ffffff", 0xe0)};
+groupCallVideoSubTextFg: {alpha("#ffffff", 0xc0)};
+premiumButtonBg1: {c5};
+premiumButtonBg2: {c4};
+premiumButtonBg3: {c1};
+premiumButtonFg: #ffffff;
+premiumIconBg1: {c3};
+premiumIconBg2: {c1};
+premiumIconBg3: {c2};
+settingsIconBg1: {c1};
+settingsIconBg2: {c2};
+settingsIconBg3: {c3};
+settingsIconBg4: {c4};
+settingsIconBg5: {c5};
+settingsIconBg6: {c6};
+settingsIconBg8: {c3};
+settingsIconBgArchive: {alpha(fg, 0xaa)};
+settingsIconFg: #ffffff;
+mapPointDrop: #fd4444;
+mapPointDot: #ffffff;
+mediaviewPlaybackIconRipple: {alpha("#ffffff", 0x14)};
+mediaviewPipControlsFg: {alpha("#ffffff", 0xd9)};
+mediaviewPipControlsFgOver: #ffffff;
+mediaviewPipPlaybackActive: {alpha("#ffffff", 0xda)};
+mediaviewPipPlaybackInactive: {alpha("#1b1f23", 0x7f)};
+callIconBg: {alpha("#ffffff", 0x1f)};
+callIconBgActive: {alpha(c5, 0xe5)};
+callIconFgActive: {fg};
+callIconActiveRipple: {alpha(c5, 0x88)};
+photoEditorItemBaseHandleFg: {c5};
+paymentsTipActive: {c2};
+outdatedFg: #ffffff;
+outdateSoonBg: #e08543;
+outdatedBg: #e05745;
+spellUnderline: {alpha("#ff0000", 0x88)};
+historyPeerSavedMessagesBg: {c5};
+historyPeerArchiveUserpicBg: {alpha(c5, 0xce)};
+songCoverOverlayFg: {alpha("#000000", 0x66)};
+botKbColor: {fg};
+currencyFg: {c5};
+creditsBg1: {c3};
+creditsBg2: {mix(c3, "#ffffff", 0.3)};
+creditsBg3: {mix(c3, "#000000", 0.1)};
+creditsFg: {mix(c3, "#000000", 0.4)};
+creditsStroke: {mix(c3, "#000000", 0.2)};
+walletTitleBg: {alpha(bg, 0xee)};
+walletTitleBgActive: {alpha(bg, 0xff)};
+walletTitleButtonBg: {alpha(c0, 0xcc)};
+walletTitleButtonFg: {fg};
+walletTitleButtonBgOver: {alpha(c5, 0x33)};
+walletTitleButtonFgOver: {fg};
+walletTitleButtonBgActive: {alpha(c0, 0xcc)};
+walletTitleButtonFgActive: {fg};
+walletTitleButtonBgActiveOver: {alpha(c5, 0x33)};
+walletTitleButtonFgActiveOver: {fg};
+walletTitleButtonCloseBg: {alpha(c0, 0xcc)};
+walletTitleButtonCloseFg: {fg};
+walletTitleButtonCloseBgOver: #c0392b;
+walletTitleButtonCloseFgOver: #ffffff;
+walletTitleButtonCloseBgActive: {alpha(c0, 0xcc)};
+walletTitleButtonCloseFgActive: {fg};
+walletTitleButtonCloseBgActiveOver: #c0392b;
+walletTitleButtonCloseFgActiveOver: #ffffff;
+walletBalanceFg: {fg};
+walletSubBalanceFg: {alpha(fg, 0xf9)};
+walletTopBg: {alpha(c0, 0xee)};
+walletTopLabelFg: {alpha(fg, 0xcc)};
+walletTopIconFg: {c5};
+walletTopIconRipple: {alpha("#ffffff", 0x12)};
+emojiSubIconFgActive: {c5};
+"""
+# ────────────────────────────────────────────────────────────────────────────
+
+# ── Фон темы ─────────────────────────────────────────────────────────────────
+wallpaper_symlink = wallpaper_link
+
+png_1x1_transparent = (
+    b'\x89PNG\r\n\x1a\n'
+    b'\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+    b'\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+    b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+    b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+)
+
+background_filename = "background.png"
+background_data = png_1x1_transparent
+
+if os.path.islink(wallpaper_symlink) or os.path.isfile(wallpaper_symlink):
+    try:
+        real_path = os.path.realpath(wallpaper_symlink)
+        if os.path.isfile(real_path):
+            with open(real_path, "rb") as img_file:
+                img_bytes = img_file.read()
+            if img_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+                background_filename = "background.png"
+                background_data = img_bytes
+            elif img_bytes[:3] == b'\xff\xd8\xff':
+                background_filename = "background.jpg"
+                background_data = img_bytes
+            elif img_bytes[:6] in (b'GIF89a', b'GIF87a'):
+                try:
+                    result = subprocess.run(
+                        ['convert', real_path + '[0]', 'png:-'],
+                        capture_output=True, timeout=10
+                    )
+                    if result.returncode == 0 and result.stdout:
+                        background_filename = "background.png"
+                        background_data = result.stdout
+                    else:
+                        raise RuntimeError("convert failed")
+                except Exception:
+                    background_filename = "background.png"
+                    background_data = png_1x1_transparent
+            else:
+                pass  
+    except Exception:
+        pass  
+# ────────────────────────────────────────────────────────────────────────────
+
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr("colors.tdesktop-theme", theme.strip())
+    zf.writestr(background_filename, background_data)
+
+theme_data = buf.getvalue()
+
+# Сначала сохраняем основную резервную копию темы в THEME_DIR
+with open(theme_file, 'wb') as f:
+    f.write(theme_data)
+
+# Записываем тему во все найденные tdata-папки приложений.
+updated_folders = []
+for tdata in [ayugram_tdata, telegram_tdata]:
+    if os.path.isdir(tdata):
+        dest = os.path.join(tdata, "wal.tdesktop-theme")
+        with open(dest, 'wb') as f:
+            f.write(theme_data)
+        updated_folders.append(tdata)
+
+# Вывод результатов для пользователя
+print("─" * 60)
+if updated_folders:
+    print(" Тема успешно сгенерирована и обновлена!")
+    print(f" Файл темы сохранен по пути:\n    {theme_file}")
+    print("\n Модифицированные папки приложений:")
+    for path in updated_folders:
+        print(f"    -> {path}")
+    
+    print("\n Инструкция по первому применению:")
+    print(" 1. Отправь файл 'wal.tdesktop-theme' самому себе в Избранное (Saved Messages).")
+    print("    (Можно просто перетащить файл из файлового менеджера или нажать Ctrl+O).")
+    print(" 2. Кликни по отправленному файлу внутри Telegram/AyuGram и нажми «Применить тему».")
+    print("\n Важно: В последующие разы делать это НЕ нужно! Тема синхронизирована с pywal,")
+    print("    и при запуске скрипта цвета в мессенджере будут обновляться автоматически на лету.")
+else:
+    print(" Ошибка: Папки AyuGram или Telegram Desktop не найдены.")
+    print(" Проверьте переменные AYUGRAM_TDATA и TELEGRAM_TDATA в начале скрипта.")
+    sys.exit(1)
+print("─" * 60)
+PY
